@@ -1,6 +1,8 @@
 package errors
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // HTTPStatus is a convenience checker for a (possibly wrapped) HTTPStatus
 // interface error. If err doesn't support the HTTPStatus interface, it will
@@ -20,6 +22,35 @@ func HTTPStatus(err error) (status int, ok bool) {
 		return http.StatusOK, false
 	}
 	return http.StatusInternalServerError, false
+}
+
+func HTTPDetail(err error) (string, bool) {
+	type httperror interface {
+		HTTPDetail() string
+	}
+
+	_, _, cause := Cause(err)
+	he, ok := cause.(httperror)
+	if ok {
+		return he.HTTPDetail(), true
+	}
+
+	return "", false
+}
+
+func (e *HTTPError) HTTPDetail() string {
+	if e == nil {
+		return ""
+	}
+
+	detail, ok := e.Fields["detail"]
+	if ok && detail != "" {
+		detailStr, _ := detail.(string)
+
+		return detailStr
+	}
+
+	return ""
 }
 
 // HTTPError provides an easy way to specify the http status code equivalent

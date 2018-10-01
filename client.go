@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -37,13 +39,46 @@ type Client interface {
 	LoadLocalLicense(ctx context.Context, dclnt WrappedDockerClient) (*model.Subscription, error)
 	SummarizeLicense(res *model.CheckResponse, keyID string) *model.Subscription
 }
+type LicensingError struct {
+	Msg   string
+	Cause error
+}
+
+func newLicensingError(err error, msg string) error {
+	return &LicensingError{
+		Msg:   msg,
+		Cause: err,
+	}
+}
+
+func GetErrorCause(err error) (error, bool) {
+	type licensingError interface {
+		GetCause() error
+	}
+	if lErr, ok := err.(licensingError); ok {
+		return lErr.GetCause(), true
+	}
+
+	return err, false
+}
+
+func (l *LicensingError) GetCause() error {
+	return l.Cause
+}
+
+func (l *LicensingError) Error() string {
+	// make an attempt to recover more detail for more specificity otherwise fallback on msg
+	if detail, ok := errors.HTTPDetail(l.Cause); ok && detail != "" {
+		return fmt.Sprintf("%s: %s", l.Msg, detail)
+	}
+
+	return l.Msg
+}
 
 func (c *client) LoginViaAuth(ctx context.Context, username, password string) (string, error) {
 	creds, err := c.login(ctx, username, password)
 	if err != nil {
-		return "", errors.Wrap(err, errors.Fields{
-			"username": username,
-		})
+		return "", newLicensingError(err, fmt.Sprintf("failed to login with username=%s", username))
 	}
 
 	return creds.Token, nil
@@ -54,7 +89,7 @@ func (c *client) GetHubUserOrgs(ctx context.Context, authToken string) ([]model.
 
 	orgs, err := c.getUserOrgs(ctx, model.PaginationParams{})
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to get orgs for user")
+		return nil, newLicensingError(err, "failed to get orgs for user")
 	}
 
 	return orgs, nil
@@ -63,9 +98,7 @@ func (c *client) GetHubUserOrgs(ctx context.Context, authToken string) ([]model.
 func (c *client) GetHubUserByName(ctx context.Context, username string) (*model.User, error) {
 	user, err := c.getUserByName(ctx, username)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.Fields{
-			"username": username,
-		})
+		return nil, newLicensingError(err, fmt.Sprintf("failed to get info for username=%s", username))
 	}
 
 	return user, nil
@@ -74,7 +107,7 @@ func (c *client) GetHubUserByName(ctx context.Context, username string) (*model.
 func (c *client) VerifyLicense(ctx context.Context, license model.IssuedLicense) (*model.CheckResponse, error) {
 	res, err := c.check(ctx, license)
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to verify license")
+		return nil, newLicensingError(err, "failed to verify license")
 	}
 
 	return res, nil
@@ -93,15 +126,15 @@ func (c *client) GenerateNewTrialSubscription(ctx context.Context, authToken, do
 				},
 			})
 			if err != nil {
-				return "", errors.Wrap(err, errors.Fields{
+				return "", newLicensingError(errors.Wrap(err, errors.Fields{
 					"dockerID": dockerID,
 					"email":    email,
-				})
+				}), "failed to create billing account")
 			}
 		} else {
-			return "", errors.Wrap(err, errors.Fields{
+			return "", newLicensingError(errors.Wrap(err, errors.Fields{
 				"dockerID": dockerID,
-			})
+			}), "failed to retrieve billing account for user")
 		}
 	}
 
@@ -115,10 +148,10 @@ func (c *client) GenerateNewTrialSubscription(ctx context.Context, authToken, do
 		},
 	})
 	if err != nil {
-		return "", errors.Wrap(err, errors.Fields{
+		return "", newLicensingError(errors.Wrap(err, errors.Fields{
 			"dockerID": dockerID,
 			"email":    email,
-		})
+		}), "failed to create new trial subscription for user")
 	}
 
 	return sub.ID, nil
@@ -130,9 +163,9 @@ func (c *client) ListSubscriptions(ctx context.Context, authToken, dockerID stri
 
 	subs, err := c.listSubscriptions(ctx, map[string]string{"docker_id": dockerID})
 	if err != nil {
-		return nil, errors.Wrap(err, errors.Fields{
+		return nil, newLicensingError(errors.Wrap(err, errors.Fields{
 			"dockerID": dockerID,
-		})
+		}), "failed to retrieve user's subscriptions")
 	}
 
 	// filter out non docker licenses
@@ -154,9 +187,9 @@ func (c *client) ListSubscriptionsDetails(ctx context.Context, authToken, docker
 
 	subs, err := c.listSubscriptionsDetails(ctx, map[string]string{"docker_id": dockerID})
 	if err != nil {
-		return nil, errors.Wrap(err, errors.Fields{
+		return nil, newLicensingError(errors.Wrap(err, errors.Fields{
 			"dockerID": dockerID,
-		})
+		}), "failed to retrieve user's detailed subscriptions")
 	}
 
 	// filter out non docker licenses
@@ -177,9 +210,7 @@ func (c *client) DownloadLicenseFromHub(ctx context.Context, authToken, subscrip
 
 	license, err := c.getLicenseFile(ctx, subscriptionID)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.Fields{
-			"subscriptionID": subscriptionID,
-		})
+		return nil, newLicensingError(err, fmt.Sprintf("failed to download license for subscriptionID=%s", subscriptionID))
 	}
 
 	return license, nil
@@ -192,7 +223,7 @@ func (c *client) ParseLicense(license []byte) (*model.IssuedLicense, error) {
 	license = bytes.Trim(license, "\xef\xbb\xbf")
 
 	if err := json.Unmarshal(license, &parsedLicense); err != nil {
-		return nil, errors.WithMessage(err, "failed to parse license")
+		return nil, newLicensingError(err, "failed to parse license")
 	}
 
 	return parsedLicense, nil
@@ -290,6 +321,7 @@ func (c *client) requestDefaults() []clientlib.RequestOption {
 			req.Header.Add("Authorization", "Bearer "+tok)
 			req.ErrorSummary = errorSummary
 			req.Client = c.hclient
+			req.ErrorBodyMaxLength = math.MaxUint32
 		},
 	}
 }
