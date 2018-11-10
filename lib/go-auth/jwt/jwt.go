@@ -100,7 +100,11 @@ func Encode(identity identity.DockerIdentity, options EncodeOptions) (string, er
 
 	jtiStr := options.Jti
 	if len(jtiStr) == 0 {
-		jtiStr = "jti-" + uuid.NewV4().String()
+		if uuidV4, err := uuid.NewV4(); err != nil {
+			return "", fmt.Errorf("failed to generate UUID: %s", err.Error())
+		} else {
+			jtiStr = "jti-" + uuidV4.String()
+		}
 	}
 	token.Claims[jti] = jtiStr
 
