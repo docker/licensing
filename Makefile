@@ -16,8 +16,8 @@ vet:
 .PHONY: lint
 lint:
 	@echo "============= Go lint ==============="
-	@go get github.com/golang/lint/golint
-	@test -z "$$(go list ./... | xargs -L1 "$(GOPATH)"/bin/golint | tee /dev/stderr)"
+	@go get golang.org/x/lint/golint
+	@test -z "$$(go list ./... | xargs -L1 golint | tee /dev/stderr)"
 
 
 
