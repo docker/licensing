@@ -115,7 +115,7 @@ func (c *client) ListSubscriptions(ctx context.Context, authToken, dockerID stri
 	// filter out non docker licenses
 	dockerSubs := []*model.Subscription{}
 	for _, sub := range subs {
-		if !strings.HasPrefix(sub.ProductID, "docker-ee") {
+		if !strings.HasPrefix(sub.ProductID, "docker-ee") && !strings.HasPrefix(sub.Name, "docker-subscription-") {
 			continue
 		}
 
@@ -139,7 +139,7 @@ func (c *client) ListSubscriptionsDetails(ctx context.Context, authToken, docker
 	// filter out non docker licenses
 	dockerSubs := []*model.SubscriptionDetail{}
 	for _, sub := range subs {
-		if !strings.HasPrefix(sub.ProductID, "docker-ee") {
+		if !strings.HasPrefix(sub.ProductID, "docker-ee") && !strings.HasPrefix(sub.Name, "docker-subscription-") {
 			continue
 		}
 
