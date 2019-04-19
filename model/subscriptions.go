@@ -34,9 +34,9 @@ type Subscription struct {
 	GraceDays         int               `json:"grace_days"`
 }
 
-// CheckFeature returns true if a given feature is among a subscription's pricing component entitlements along with
+// GetFeatureValue returns true if a given feature is among a subscription's pricing component entitlements along with
 // it's corresponding value and false if it is not found
-func (s *Subscription) CheckFeature(featureName string) (int, bool) {
+func (s *Subscription) GetFeatureValue(featureName string) (int, bool) {
 	for _, component := range s.PricingComponents {
 		if component.Name == featureName && component.Value > 0 {
 			return component.Value, true

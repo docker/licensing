@@ -66,7 +66,7 @@ func main() {
 	// find first available subscription with given feature
 	var featuredSub *model.Subscription
 	for _, sub := range subs {
-		_, ok := sub.CheckFeature(appFeature)
+		_, ok := sub.GetFeatureValue(appFeature)
 		if ok {
 			featuredSub = sub
 			break
