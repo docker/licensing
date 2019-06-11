@@ -188,7 +188,8 @@ func TestPanic1(t *testing.T) {
 	stack, wraps, cause := Cause(err)
 
 	require.NotNil(t, stack)
-	require.Len(t, stack, 9)
+	// go 1.12 produces 8, go 1.11 and under produces 9
+	require.True(t, len(stack) >= 8)
 	require.NotNil(t, wraps)
 	require.Regexp(t, "panicBottom1", cause.Error())
 	require.Len(t, wraps, 1)
