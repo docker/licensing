@@ -115,3 +115,23 @@ func TestClient_VerifyLicense(t *testing.T) {
 	_, err = client.VerifyLicense(ctx, *lic)
 	require.NoError(t, err)
 }
+
+func TestClient_SummarizeLicense(t *testing.T) {
+	teardown := setup()
+	defer teardown()
+
+	ctx := context.Background()
+
+	licBytes, err := ioutil.ReadFile("testdata/expired-license.lic")
+	require.NoError(t, err)
+
+	lic, err := client.ParseLicense(licBytes)
+	require.NoError(t, err)
+
+	cr, err := client.VerifyLicense(ctx, *lic)
+	require.NoError(t, err)
+
+	summary := client.SummarizeLicense(cr).String()
+	expected := "Components: 1 Nodes	Expiration date: 2018-03-18	Expired! You will no longer receive updates. Please renew at https://docker.com/licensing"
+	require.Equal(t, summary, expected)
+}

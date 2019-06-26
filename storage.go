@@ -134,6 +134,15 @@ func checkResponseToSubscription(checkResponse *model.CheckResponse) *model.Subs
 		state = "active"
 	}
 
+	// For backward compatibility, show information about old (per node) licenses
+	components := checkResponse.PricingComponents
+	if checkResponse.MaxEngines > 0 {
+		components = append(components, &model.SubscriptionPricingComponent{
+			Name:  "Nodes",
+			Value: checkResponse.MaxEngines,
+		})
+	}
+
 	// Translate the legacy structure into the new Subscription fields
 	return &model.Subscription{
 		ID:                checkResponse.SubscriptionID,
@@ -141,7 +150,7 @@ func checkResponseToSubscription(checkResponse *model.CheckResponse) *model.Subs
 		ProductRatePlanID: checkResponse.RatePlanID,
 		Expires:           &checkResponse.Expiration,
 		State:             state,
-		PricingComponents: checkResponse.PricingComponents,
+		PricingComponents: components,
 		GraceDays:         checkResponse.GraceDays,
 	}
 }
