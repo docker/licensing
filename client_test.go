@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/docker/licensing"
+	"github.com/docker/licensing/model"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,6 +100,52 @@ func TestClient_ListSubscriptions(t *testing.T) {
 	require.NoError(t, err)
 	// test filter, should only be one sub with 'docker-ee' prefix
 	require.Len(t, subs, 1)
+}
+
+func TestClient_ParseLicense(t *testing.T) {
+	teardown := setup()
+	defer teardown()
+
+	tests := []struct {
+		doc         string
+		license     []byte
+		expected    model.IssuedLicense
+		expectedErr string
+	}{
+		{
+			doc:      "well-formed license with BOM",
+			license:  []byte("\xef\xbb\xbf{\"key_id\":\"kid\",\"private_key\":\"pk\",\"authorization\":\"auth\"}"),
+			expected: model.IssuedLicense{KeyID: "kid", PrivateKey: "pk", Authorization: "auth"},
+		},
+		{
+			doc:         "license with invalid characters",
+			license:     []byte("\xbf\xbb\xef{\"key_id\":\"kid\",\"private_key\":\"pk\",\"authorization\":\"auth\"}\xbf\xbb\xef\xef\xbb\xbf"),
+			expectedErr: "failed to parse license: invalid character",
+		},
+		{
+			doc:         "malformed JSON with BOM",
+			license:     []byte("\xef\xbb\xbf{"),
+			expectedErr: "failed to parse license: unexpected end of JSON input",
+		},
+		{
+			doc:         "malformed JSON without BOM",
+			license:     []byte("{"),
+			expectedErr: "failed to parse license: unexpected end of JSON input",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.doc, func(t *testing.T) {
+			lic, err := client.ParseLicense(tc.license)
+			if tc.expectedErr != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, *lic, tc.expected)
+			}
+		})
+	}
 }
 
 func TestClient_VerifyLicense(t *testing.T) {
