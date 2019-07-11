@@ -166,7 +166,7 @@ func (c *client) ParseLicense(license []byte) (*model.IssuedLicense, error) {
 	parsedLicense := &model.IssuedLicense{}
 	// The file may contain a leading BOM, which will choke the
 	// json deserializer.
-	license = bytes.Trim(license, "\xef\xbb\xbf")
+	license = bytes.TrimPrefix(license, []byte("\xef\xbb\xbf"))
 
 	if err := json.Unmarshal(license, &parsedLicense); err != nil {
 		return nil, errors.WithMessage(err, "failed to parse license")
